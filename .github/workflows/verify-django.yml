@@ -1,0 +1,32 @@
+name: Verify Django image
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore complete Django source tree
+        run: python -m zipfile -e source.zip .
+      - name: Build Django Docker image
+        shell: bash
+        run: |
+          set -o pipefail
+          echo 'docker build --progress=plain -t soundstage-django:verified .' | tee django-docker-build.txt
+          docker build --progress=plain -t soundstage-django:verified . 2>&1 | tee -a django-docker-build.txt
+      - name: Verify Django migrations in the image
+        shell: bash
+        run: |
+          set -o pipefail
+          echo 'docker run --rm soundstage-django:verified python manage.py migrate --noinput' | tee django-container-migrations.txt
+          docker run --rm soundstage-django:verified python manage.py migrate --noinput 2>&1 | tee -a django-container-migrations.txt
+          docker run --rm soundstage-django:verified python manage.py check 2>&1 | tee -a django-container-migrations.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: django-build-and-migration-evidence
+          path: |
+            django-docker-build.txt
+            django-container-migrations.txt
+
